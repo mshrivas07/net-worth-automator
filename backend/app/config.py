@@ -1,3 +1,4 @@
+from decimal import Decimal
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,12 +8,14 @@ class Settings(BaseSettings):
     app_name: str = "Net Worth Automator"
     app_version: str = "0.1.0"
     environment: str = "development"
-
+    openai_api_key: str
     database_url: str
 
     api_prefix: str = "/api/v1"
 
     cors_origins: str = "http://localhost:5173"
+
+    extraction_auto_accept_threshold: Decimal = Decimal("0.85")
 
     model_config = SettingsConfigDict(
         env_file=".env",
