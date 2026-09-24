@@ -160,4 +160,4 @@ class ExtractionService:
         for field, weight in weights.items():
             score = field_confidences.get(field) or 0
             total += Decimal(str(score)) * Decimal(str(weight))
-        return total.quantize(Decimal("0.0001"))
+        return total.quantize(Decimal("0.01"))

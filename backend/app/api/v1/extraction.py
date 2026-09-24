@@ -1,23 +1,41 @@
 # app/api/v1/extraction.py
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.schemas.extraction import ExtractionResultResponse, ExtractionConfirm
-from app.repositories.extraction_repository import ExtractionRepository
-from app.repositories.account_repository import AccountRepository
-from app.repositories.snapshot_repository import SnapshotRepository
 from app.models.snapshot import AccountSnapshot
-from datetime import datetime, timezone
+from app.repositories.account_repository import AccountRepository
+from app.repositories.extraction_result_repository import ExtractionResultRepository
+from app.repositories.snapshot_repository import SnapshotRepository
+from app.schemas.extraction import (
+    ExtractionConfirm,
+    ExtractionResultListResponse,
+    ExtractionResultResponse,
+)
 
 router = APIRouter(prefix="/extraction-results", tags=["Extraction"])
 
 
+@router.get("/document/{document_id}", response_model=ExtractionResultListResponse)
+async def list_extraction_results_for_document(
+    document_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Returns every extracted account for a document (a single-statement
+    upload will have one row; a multi-account dashboard screenshot will
+    have several) — this is what the review UI renders as a list.
+    """
+    results = await ExtractionResultRepository.list_by_document_id(db, document_id)
+    return ExtractionResultListResponse(document_id=document_id, results=results)
+
+
 @router.get("/{extraction_id}", response_model=ExtractionResultResponse)
 async def get_extraction_result(extraction_id: UUID, db: AsyncSession = Depends(get_db)):
-    result = await ExtractionRepository.get_by_id(db, extraction_id)
+    result = await ExtractionResultRepository.get_by_id(db, extraction_id)
     if result is None:
         raise HTTPException(404, "Extraction result not found")
     return result
@@ -30,10 +48,12 @@ async def confirm_extraction(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    User has reviewed (and possibly corrected) the extracted fields.
-    Writes the confirmed values into account_snapshots.
+    User has reviewed (and possibly corrected) one extracted account.
+    Writes a verified AccountSnapshot and links this extraction to the
+    chosen account. Does NOT touch any other extraction rows from the
+    same document — the review UI calls this once per confirmed account.
     """
-    extraction = await ExtractionRepository.get_by_id(db, extraction_id)
+    extraction = await ExtractionResultRepository.get_by_id(db, extraction_id)
     if extraction is None:
         raise HTTPException(404, "Extraction result not found")
 
@@ -48,14 +68,30 @@ async def confirm_extraction(
         currency=request.currency,
         extraction_method=extraction.extraction_method,
         confidence_score=extraction.confidence_score,
-        is_verified=True,  # user just confirmed it
+        is_verified=True,
         source_document_id=extraction.document_id,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc),
     )
     await SnapshotRepository.create(db, snapshot)
 
-    extraction.account_id = request.account_id
-    await db.commit()
+    await ExtractionResultRepository.assign_account(db, extraction, request.account_id)
 
     return extraction
+
+
+@router.delete("/{extraction_id}", status_code=204)
+async def dismiss_extraction(extraction_id: UUID, db: AsyncSession = Depends(get_db)):
+    """
+    User reviewed this row and decided it's not worth keeping (e.g. a
+    duplicate, a misread section subtotal, an account they don't track).
+    Does not delete AccountSnapshot rows already created from a prior
+    confirm — only relevant for un-confirmed rows.
+    """
+    extraction = await ExtractionResultRepository.get_by_id(db, extraction_id)
+    if extraction is None:
+        raise HTTPException(404, "Extraction result not found")
+    if extraction.account_id is not None:
+        raise HTTPException(400, "Cannot dismiss an extraction that has already been confirmed")
+
+    await ExtractionResultRepository.delete(db, extraction)

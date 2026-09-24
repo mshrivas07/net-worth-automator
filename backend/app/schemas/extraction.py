@@ -27,8 +27,18 @@ class ExtractionResultResponse(BaseModel):
     created_at: datetime
 
 
+class ExtractionResultListResponse(BaseModel):
+    document_id: UUID
+    results: list[ExtractionResultResponse]
+
+
 class ExtractionConfirm(BaseModel):
-    account_id: UUID          # user-selected or user-confirmed account
-    snapshot_date: date       # editable — defaults to extracted_statement_date, user can correct
-    balance: Decimal          # editable — defaults to extracted_balance, user can correct
+    """
+    Submitted by the review UI. Pre-filled with extracted values but the
+    user may have corrected any field before submitting — whatever is
+    sent here is treated as final and written to AccountSnapshot as-is.
+    """
+    account_id: UUID
+    snapshot_date: date
+    balance: Decimal
     currency: str = "CAD"
