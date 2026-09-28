@@ -7,6 +7,7 @@ from app.api.v1.accounts import router as accounts_router
 from app.api.v1.snapshots import router as snapshots_router
 from app.api.v1.net_worth import router as net_worth_router
 from app.api.v1.extraction import router as extraction_router
+from app.api.v1.documents import router as documents_router
 
 
 app = FastAPI(
@@ -30,11 +31,6 @@ app.add_middleware(
 
 
 app.include_router(
-    accounts_router,
-    prefix=settings.api_prefix,
-)
-
-app.include_router(
     snapshots_router,
     prefix=settings.api_prefix,
 )
@@ -47,6 +43,16 @@ app.include_router(
 app.include_router(
     extraction_router,
     prefix=settings.api_prefix
+)
+
+app.include_router(
+    accounts_router,
+    prefix=settings.api_prefix,
+)
+
+app.include_router(
+    documents_router,
+    prefix=settings.api_prefix,
 )
 
 
@@ -72,3 +78,4 @@ async def health():
     return {
         "status": "healthy",
     }
+

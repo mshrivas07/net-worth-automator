@@ -2,12 +2,16 @@
 import uuid
 from datetime import date, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Date, DateTime, Enum, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
+
+if TYPE_CHECKING:
+    from app.models.document import Document
 
 
 extraction_method_enum = Enum(
@@ -27,10 +31,11 @@ class ExtractionResult(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
 
-    # Plain UUID column, not an ORM relationship yet — Document model
-    # doesn't exist until Phase 2, #4. Linked at the ORM level in
-    # Phase 2, #8 once both models exist.
-    document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("networth.documents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     account_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
     extracted_institution: Mapped[str | None] = mapped_column(String(200))
@@ -42,16 +47,17 @@ class ExtractionResult(Base):
 
     extraction_method: Mapped[str] = mapped_column(extraction_method_enum, nullable=False)
     confidence_score: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
-    # Numeric(5,4) holds 0.0000–9.9999 — matches the 0-1 confidence scale
-    # from ExtractionService. If your original 001_initial_schema.sql
-    # defined this column as Numeric(5,2) for a 0-100 scale, run a
-    # migration to widen it (see note below).
 
     raw_text: Mapped[str | None] = mapped_column(Text)
     raw_json: Mapped[dict | None] = mapped_column(JSONB)
 
     requires_review: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    document: Mapped["Document"] = relationship(
+        back_populates="extraction_results",
+        lazy="raise",
+    )
 
     def __repr__(self) -> str:
         return (

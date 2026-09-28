@@ -1,13 +1,15 @@
 # app/models/document.py
 import uuid
 from datetime import date, datetime
-
+from typing import TYPE_CHECKING
 from sqlalchemy import BigInteger, Date, DateTime, Enum, String, Text
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models import Base
 
+if TYPE_CHECKING:
+    from app.models.extraction_result import ExtractionResult
 
 document_type_enum = Enum(
     "BANK_STATEMENT", "CREDIT_CARD_STATEMENT", "INVESTMENT_STATEMENT",
@@ -41,3 +43,10 @@ class Document(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_message: Mapped[str | None] = mapped_column(Text)
+    extraction_results: Mapped[list["ExtractionResult"]] = relationship(
+        back_populates="document",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy="raise",
+        order_by="ExtractionResult.created_at",
+    )

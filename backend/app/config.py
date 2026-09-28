@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     environment: str = "development"
     openai_api_key: str
     database_url: str
-
+    storage_root: str = "./storage"
     api_prefix: str = "/api/v1"
 
     cors_origins: str = "http://localhost:5173"
